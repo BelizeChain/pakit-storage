@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest pytest-asyncio pytest-cov requests
+      
+      - name: Run tests
+        env:
+          REDIS_URL: redis://localhost:6379
+          BLOCKCHAIN_ENABLED: "false"
+          KINICH_ENABLED: "false"
+          MOCK_MODE: "true"
+        run: |
+          pytest tests/ -v --cov=pakit --cov-report=xml --cov-report=term
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+  
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      
+      - name: Install linters
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff mypy bandit black
+      
+      - name: Run black (check only)
+        run: black --check pakit/
+      
+      - name: Run ruff
+        run: ruff check pakit/
+      
+      - name: Run mypy
+        run: mypy pakit/ --ignore-missing-imports
+      
+      - name: Run bandit
+        run: bandit -r pakit/ -ll --skip B101,B601
+  
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest pytest-asyncio
+      
+      - name: Run integration tests
+        env:
+          REDIS_URL: redis://localhost:6379
+          BLOCKCHAIN_ENABLED: "false"
+          KINICH_ENABLED: "false"
+        run: |
+          pytest tests/test_integration.py -v

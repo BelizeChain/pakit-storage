@@ -1,0 +1,43 @@
+# Pakit Requirements
+# Install with: pip install -r pakit_requirements.txt
+
+# Core compression algorithms (optional but recommended)
+zstandard>=0.22.0      # ZSTD compression (best general-purpose)
+lz4>=4.3.0             # LZ4 compression (ultra-fast)
+brotli>=1.1.0          # Brotli compression (excellent for text/web)
+
+# Content addressing
+base58>=2.1.1          # Base58 encoding for IPFS-style CIDs
+
+# Storage backends (optional)
+ipfshttpclient>=0.8.0a2  # IPFS integration (use alpha version)
+# arweave-python-client  # Arweave integration (install separately if needed)
+
+# Web hosting (BNS integration)
+substrate-interface>=1.7.0  # BelizeChain blockchain integration
+aiohttp>=3.9.0              # Async HTTP client/server
+dnspython>=2.6.0            # DNS verification for external domains
+aiofiles>=23.2.0            # Async file operations
+# DNS server dependencies
+dnslib>=0.9.24
+
+# SSL/TLS certificate management dependencies
+acme>=2.7.0
+cryptography>=41.0.0
+pyOpenSSL>=23.3.0
+
+# Quantum integration (requires kinich)
+# numpy>=1.26.0         # Required for quantum operations
+# qiskit>=1.0.0         # Quantum computing framework
+
+# ML optimization (requires nawal)
+# scikit-learn>=1.4.0   # Machine learning for optimization
+
+# API server (optional)
+# fastapi>=0.109.0      # REST API
+# uvicorn>=0.27.0       # ASGI server
+# websockets>=12.0      # WebSocket support
+
+# Development
+pytest>=8.0.0          # Testing framework
+pytest-cov>=4.1.0      # Coverage reporting

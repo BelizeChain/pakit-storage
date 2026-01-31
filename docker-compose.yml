@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  pakit-api:
+    build: .
+    container_name: pakit-api
+    ports:
+      - "8000:8000"
+    environment:
+      - PAKIT_STORAGE_DIR=/data/storage
+      - PAKIT_LOG_LEVEL=INFO
+      - PAKIT_ENABLE_ML=true
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - pakit-storage:/data/storage
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+    networks:
+      - pakit-network
+    restart: unless-stopped
+
+  pakit-p2p:
+    build: .
+    container_name: pakit-p2p
+    command: python -m node.p2p_node
+    ports:
+      - "7777:7777"
+      - "7778:7778"
+    environment:
+      - PAKIT_P2P_PORT=7777
+      - PAKIT_DHT_PORT=7778
+    volumes:
+      - pakit-storage:/data/storage
+    networks:
+      - pakit-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: pakit-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - pakit-network
+    restart: unless-stopped
+
+  ipfs:
+    image: ipfs/kubo:latest
+    container_name: pakit-ipfs
+    ports:
+      - "4001:4001"
+      - "5001:5001"
+      - "8080:8080"
+    volumes:
+      - ipfs-data:/data/ipfs
+    networks:
+      - pakit-network
+    restart: unless-stopped
+    environment:
+      - IPFS_PROFILE=server
+
+volumes:
+  pakit-storage:
+  redis-data:
+  ipfs-data:
+
+networks:
+  pakit-network:
+    driver: bridge

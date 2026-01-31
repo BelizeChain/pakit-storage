@@ -1,0 +1,41 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Git
+.git/
+.gitignore
+
+# Docs (include only necessary)
+docs/archive/
+
+# Logs
+*.log
+logs/*.log
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Development files
+PRODUCTION_RELEASE.md
+CLEANUP_STATUS.md
