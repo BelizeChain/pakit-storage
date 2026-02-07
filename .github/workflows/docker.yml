@@ -60,4 +60,4 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           docker build -t pakit:test .
-          docker run --rm pakit:test python -c "import pakit; print('✅ Import successful')"
+          docker run --rm pakit:test python -c "import core; print('✅ Import successful')"

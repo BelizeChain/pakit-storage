@@ -36,7 +36,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          pip install -r pakit_requirements.txt
           pip install pytest pytest-asyncio pytest-cov requests
       
       - name: Run tests
@@ -46,7 +46,7 @@ jobs:
           KINICH_ENABLED: "false"
           MOCK_MODE: "true"
         run: |
-          pytest tests/ -v --cov=pakit --cov-report=xml --cov-report=term
+          pytest tests/ -v --cov --cov-report=xml --cov-report=term
       
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -71,16 +71,16 @@ jobs:
           pip install ruff mypy bandit black
       
       - name: Run black (check only)
-        run: black --check pakit/
+        run: black --check --exclude "(tests|docs|logs)" .
       
       - name: Run ruff
-        run: ruff check pakit/
+        run: ruff check .
       
       - name: Run mypy
-        run: mypy pakit/ --ignore-missing-imports
+        run: mypy . --ignore-missing-imports --exclude tests
       
       - name: Run bandit
-        run: bandit -r pakit/ -ll --skip B101,B601
+        run: bandit -r . -ll --skip B101,B601 --exclude ./tests
   
   integration:
     runs-on: ubuntu-latest
@@ -101,7 +101,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          pip install -r pakit_requirements.txt
           pip install pytest pytest-asyncio
       
       - name: Run integration tests

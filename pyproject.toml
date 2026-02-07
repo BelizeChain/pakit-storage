@@ -52,11 +52,8 @@ quantum = [
     "qiskit-aer>=0.13.0",
 ]
 
-[tool.setuptools]
-packages = ["pakit"]
-
-[tool.setuptools.package-data]
-pakit = ["py.typed"]
+[tool.setuptools.packages.find]
+exclude = ["tests*", "docs*", "logs*"]
 
 [tool.black]
 line-length = 100
@@ -127,10 +124,12 @@ module = "tests.*"
 ignore_errors = true
 
 [tool.coverage.run]
-source = ["pakit"]
+source = ["."]
 omit = [
     "*/tests/*",
     "*/test_*.py",
+    "setup.py",
+    "docs/*",
 ]
 
 [tool.coverage.report]

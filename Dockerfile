@@ -23,8 +23,6 @@ RUN pip install --no-cache-dir -r pakit_requirements.txt
 # Copy application code
 COPY . .
 
-# Install Pakit package
-RUN pip install -e .
 
 # Create logs directory
 RUN mkdir -p logs

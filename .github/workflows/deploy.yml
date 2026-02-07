@@ -30,7 +30,6 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r pakit_requirements.txt
-          pip install -e .
           pip install pytest pytest-asyncio httpx
 
       - name: Run tests
