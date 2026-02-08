@@ -76,54 +76,63 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     environment: production
+    env:
+      ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+      ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+      REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+      REDIS_HOST: ${{ secrets.REDIS_HOST }}
     steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
       - name: Deploy to VM
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
-          port: 22
-          script: |
-            set -e
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 \
+            -i ~/.ssh/deploy_key \
+            "${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}" bash -s << ENDSSH
+          set -e
 
-            # Ensure shared network exists
-            docker network create belizechain-net 2>/dev/null || true
+          docker network create belizechain-net 2>/dev/null || true
 
-            # Login to ACR
-            echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ env.REGISTRY }} \
-              -u "${{ secrets.ACR_USERNAME }}" --password-stdin
+          echo "${ACR_PASSWORD}" | docker login belizechainregistry.azurecr.io \
+            -u "${ACR_USERNAME}" --password-stdin
 
-            # Pull latest image
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker pull belizechainregistry.azurecr.io/pakit-storage:latest
 
-            # Stop existing container gracefully
-            docker stop pakit-storage 2>/dev/null && docker rm pakit-storage 2>/dev/null || true
+          docker stop pakit-storage 2>/dev/null && docker rm pakit-storage 2>/dev/null || true
 
-            # Run new container
-            docker run -d \
-              --name pakit-storage \
-              --network belizechain-net \
-              --restart unless-stopped \
-              -p 8001:8000 \
-              -e DATABASE_URL="postgresql://belizechain:${{ secrets.POSTGRES_PASSWORD }}@${{ secrets.POSTGRES_HOST }}:5432/pakit" \
-              -e REDIS_URL="rediss://:${{ secrets.REDIS_PASSWORD }}@${{ secrets.REDIS_HOST }}:6380/1" \
-              -e BLOCKCHAIN_WS_URL="ws://belizechain-node:9944" \
-              -e ENVIRONMENT=production \
-              -e LOG_LEVEL=info \
-              -v pakit-data:/app/data \
-              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker run -d \
+            --name pakit-storage \
+            --network belizechain-net \
+            --restart unless-stopped \
+            -p 8001:8000 \
+            -e DATABASE_URL="postgresql://belizechain:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/pakit" \
+            -e REDIS_URL="rediss://:${REDIS_PASSWORD}@${REDIS_HOST}:6380/1" \
+            -e BLOCKCHAIN_WS_URL="ws://belizechain-node:9944" \
+            -e ENVIRONMENT=production \
+            -e LOG_LEVEL=info \
+            -v pakit-data:/app/data \
+            belizechainregistry.azurecr.io/pakit-storage:latest
 
-            # Health check
-            echo "Waiting for pakit-storage to become healthy..."
-            for i in $(seq 1 20); do
-              if curl -sf http://localhost:8001/health > /dev/null 2>&1; then
-                echo "✅ pakit-storage is healthy"
-                exit 0
-              fi
-              echo "  Attempt $i/20 — waiting 5s..."
-              sleep 5
-            done
-            echo "❌ pakit-storage failed health check"
-            docker logs --tail 50 pakit-storage
-            exit 1
+          echo "Waiting for pakit-storage to become healthy..."
+          for i in \$(seq 1 20); do
+            if curl -sf http://localhost:8001/health > /dev/null 2>&1; then
+              echo "✅ pakit-storage is healthy"
+              exit 0
+            fi
+            echo "  Attempt \$i/20 — waiting 5s..."
+            sleep 5
+          done
+          echo "❌ pakit-storage failed health check"
+          docker logs --tail 50 pakit-storage
+          exit 1
+          ENDSSH
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
