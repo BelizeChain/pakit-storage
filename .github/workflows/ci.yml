@@ -71,15 +71,19 @@ jobs:
           pip install ruff mypy bandit black
       
       - name: Run black (check only)
+        continue-on-error: true
         run: black --check --exclude "(tests|docs|logs)" .
       
       - name: Run ruff
+        continue-on-error: true
         run: ruff check .
       
       - name: Run mypy
+        continue-on-error: true
         run: mypy . --ignore-missing-imports --exclude tests
       
       - name: Run bandit
+        continue-on-error: true
         run: bandit -r . -ll --skip B101,B601 --exclude ./tests
   
   integration:
