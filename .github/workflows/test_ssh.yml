@@ -1,0 +1,24 @@
+name: Test SSH Connection
+on: workflow_dispatch
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Debug key info
+        run: |
+          KEY="${{ secrets.VM_SSH_KEY }}"
+          echo "Key length: ${#KEY}"
+          echo "First line: $(echo "$KEY" | head -1)"
+          echo "Last line: $(echo "$KEY" | tail -1)"
+          echo "Line count: $(echo "$KEY" | wc -l)"
+          
+      - name: Test with raw SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh -v -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            -i ~/.ssh/deploy_key \
+            ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} \
+            "echo SSH_SUCCESS && id"
