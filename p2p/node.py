@@ -6,11 +6,13 @@ Each Pakit node has:
 - Network address (IP:port)
 - Connection pool to other peers
 - Local DAG backend
+- Mesh networking integration (NEW)
 
 Nodes participate in:
 - DHT for peer/block discovery
 - Gossip for block announcements
 - Request/response for block retrieval
+- Mesh networking for Byzantine-resistant peer discovery (NEW)
 """
 
 import hashlib
@@ -20,6 +22,13 @@ from dataclasses import dataclass, field
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
 import logging
+
+# Import mesh networking manager (optional)
+try:
+    from p2p.mesh.mesh_manager import MeshNetworkManager
+    MESH_AVAILABLE = True
+except ImportError:
+    MESH_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +81,9 @@ class PakitNode:
         listen_address: str = "0.0.0.0:7777",
         bootstrap_peers: Optional[List[str]] = None,
         max_peers: int = 50,
-        data_dir: str = "./pakit_node"
+        data_dir: str = "./pakit_node",
+        enable_mesh: bool = True,
+        mesh_network_id: str = "pakit-main"
     ):
         """
         Initialize Pakit P2P node.
@@ -82,6 +93,8 @@ class PakitNode:
             bootstrap_peers: Initial peers to connect to
             max_peers: Maximum number of peer connections
             data_dir: Directory for node data (keys, DAG, etc.)
+            enable_mesh: Enable mesh networking for Byzantine-resistant peer discovery
+            mesh_network_id: Network ID for mesh isolation
         """
         self.listen_address = listen_address
         self.max_peers = max_peers
@@ -97,6 +110,18 @@ class PakitNode:
         
         # Connection tracking
         self.connected_peers: Set[str] = set()  # Currently connected peer IDs
+        
+        # Mesh networking manager (for Byzantine-resistant peer discovery)
+        self.mesh_manager: Optional[MeshNetworkManager] = None
+        if enable_mesh and MESH_AVAILABLE:
+            try:
+                self.mesh_manager = MeshNetworkManager(
+                    peer_id=self.peer_id,
+                    listen_port=7778  # Separate port for mesh
+                )
+                logger.info("Mesh networking enabled for Byzantine-resistant peer discovery")
+            except Exception as e:
+                logger.warning(f"Failed to initialize mesh networking: {e}")
         
         logger.info(f"Initialized Pakit node: {self.peer_id[:16]}...")
         logger.info(f"Listening on: {self.listen_address}")
@@ -143,6 +168,14 @@ class PakitNode:
             format=serialization.PublicFormat.Raw
         )
         return hashlib.sha256(pub_bytes).hexdigest()
+    
+    def _get_signing_key_bytes(self) -> bytes:
+        """Get signing key bytes for mesh networking."""
+        return self.private_key.private_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PrivateFormat.Raw,
+            encryption_algorithm=serialization.NoEncryption()
+        )
     
     def add_peer(self, peer_info: PeerInfo) -> bool:
         """
@@ -214,15 +247,7 @@ class PakitNode:
             if not peer.is_alive(timeout)
         ]
         
-        for peer_id in dead_peers:
-            self.remove_peer(peer_id)
-        
-        if dead_peers:
-            logger.info(f"Cleaned up {len(dead_peers)} dead peers")
-    
-    def get_stats(self) -> Dict:
-        """Get node statistics."""
-        return {
+        stats = {
             "peer_id": self.peer_id,
             "address": self.listen_address,
             "total_peers": len(self.peers),
@@ -233,6 +258,119 @@ class PakitNode:
             ),
             "bootstrap_peers": len(self.bootstrap_peers)
         }
+        
+        # Add mesh networking stats
+        if self.mesh_manager:
+            stats["mesh_enabled"] = True
+            stats["mesh_health"] = self.mesh_manager.get_health_status()
+        else:
+            stats["mesh_enabled"] = False
+        
+        return stats
+    
+    async def discover_peers_via_mesh(self, max_peers: int = 10) -> List[PeerInfo]:
+        """
+        Discover peers using mesh networking (Byzantine-resistant).
+        
+        Args:
+            max_peers: Maximum number of peers to discover
+            
+        Returns:
+            List of discovered peer info
+        """
+        if not self.mesh_manager:
+            logger.warning("Mesh networking not available for peer discovery")
+            return []
+        
+        try:
+            # Discover peers through mesh
+            mesh_peers = await self.mesh_manager.discover_storage_peers(max_peers)
+            
+            # Convert mesh peers to PeerInfo
+            discovered = []
+            for mesh_peer in mesh_peers:
+                # Create PeerInfo from mesh discovery
+                peer_info = PeerInfo(
+                    peer_id=mesh_peer["peer_id"],
+                    address=mesh_peer.get("address", "unknown"),
+                    public_key=bytes.fromhex(mesh_peer.get("public_key", "")),
+                    reputation=mesh_peer.get("reputation", 0.5)
+                )
+                discovered.append(peer_info)
+                
+                # Add to peer table
+                self.add_peer(peer_info)
+            
+            logger.info(f"Discovered {len(discovered)} peers via mesh networking")
+            return discovered
+            
+        except Exception as e:
+            logger.error(f"Failed to discover peers via mesh: {e}")
+            return []
+    
+    async def announce_block_via_mesh(self, block_hash: str, block_size: int) -> bool:
+        """
+        Announce new block via mesh networking.
+        
+        Args:
+            block_hash: Hash of the new block
+            block_size: Size of the block in bytes
+            
+        Returns:
+            True if announcement successful
+        """
+        if not self.mesh_manager:
+            return False
+        
+        try:
+            success = await self.mesh_manager.announce_new_block(
+                block_hash=block_hash,
+                block_size=block_size
+            )
+            
+            if success:
+                logger.info(f"Announced block {block_hash[:16]}... via mesh")
+            
+            return success
+            
+        except Exception as e:
+            logger.error(f"Failed to announce block via mesh: {e}")
+            return False
+    
+    async def start_mesh_networking(self):
+        """Start mesh networking manager."""
+        if self.mesh_manager:
+            await self.mesh_manager.start()
+            logger.info("Mesh networking started")
+    
+    async def stop_mesh_networking(self):
+        """Stop mesh networking manager."""
+        if self.mesh_manager:
+            await self.mesh_manager.stop()
+            logger.info("Mesh networking stopped")
+    
+    def get_stats(self) -> Dict:
+        """Get node statistics."""
+        stats = {
+            "peer_id": self.peer_id,
+            "address": self.listen_address,
+            "total_peers": len(self.peers),
+            "connected_peers": len(self.connected_peers),
+            "avg_reputation": (
+                sum(p.reputation for p in self.peers.values()) / len(self.peers)
+                if self.peers else 0.0
+            ),
+            "bootstrap_peers": len(self.bootstrap_peers)
+        }
+        
+        # Add mesh networking stats
+        if self.mesh_manager:
+            stats["mesh_enabled"] = True
+            stats["mesh_health"] = self.mesh_manager.get_health_status()
+        else:
+            stats["mesh_enabled"] = False
+        
+        return stats
     
     def sign_message(self, message: bytes) -> bytes:
         """Sign a message with node's private key."""

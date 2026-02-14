@@ -17,7 +17,14 @@ from .deduplication import DeduplicationEngine
 from .dag_storage import DagBlock, CompressionAlgorithm as DagCompressionAlgorithm, create_genesis_block
 from .dag_builder import DagBuilder, DagState
 from .dag_index import DagIndex
-from ..backends import LocalBackend, IPFSBackend, ArweaveBackend
+from backends import LocalBackend, IPFSBackend, ArweaveBackend
+
+# Import ZK proof generator (optional)
+try:
+    from core.zk_storage_proofs import StorageProofGenerator
+    ZK_PROOFS_AVAILABLE = True
+except ImportError:
+    ZK_PROOFS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +196,15 @@ class PakitStorageEngine:
         self.enable_blockchain_proofs = enable_blockchain_proofs
         self.migration_mode = migration_mode
         
+        # ZK proof generator (for privacy-preserving storage verification)
+        self.zk_proof_generator = None
+        if ZK_PROOFS_AVAILABLE and enable_blockchain_proofs:
+            try:
+                self.zk_proof_generator = StorageProofGenerator()
+                logger.info("ZK storage proof generator initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize ZK proof generator: {e}")
+        
         # Metadata storage
         self.metadata: Dict[str, StorageMetadata] = {}
         
@@ -317,6 +333,27 @@ class PakitStorageEngine:
         self.stats.total_items += 1
         self.stats.total_original_bytes += original_size
         self.stats.total_compressed_bytes += compressed_size
+        
+        # Step 8: Generate ZK storage proof (privacy-preserving verification)
+        if self.zk_proof_generator and self.enable_blockchain_proofs:
+            try:
+                # Generate ZK proof for storage verification
+                zk_proof = self.zk_proof_generator.generate_storage_proof(
+                    content_id=cid_hex,
+                    data_size=original_size,
+                    storage_location=backend
+                )
+                
+                logger.debug(
+                    f"Generated ZK storage proof for {cid_hex[:16]}... "
+                    f"(type: {zk_proof.get('type', 'unknown')})"
+                )
+                
+                # Proof can be submitted to blockchain via StorageProofConnector
+                # This is handled by the blockchain integration layer
+                
+            except Exception as e:
+                logger.warning(f"Failed to generate ZK proof: {e}")
         
         # Note: Blockchain proofs are now handled directly by backends
         # via StorageProofConnector in ipfs_backend.py and arweave_backend.py

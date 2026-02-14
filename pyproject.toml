@@ -4,15 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pakit"
-version = "1.0.0"
-description = "Sovereign DAG-based decentralized storage for BelizeChain"
+version = "1.1.0"
+description = "Sovereign DAG-based decentralized storage for BelizeChain with mesh networking and ZK proofs"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
     {name = "BelizeChain Team", email = "development@belizechain.bz"}
 ]
-keywords = ["blockchain", "storage", "dag", "p2p", "decentralized", "ipfs", "arweave"]
+keywords = ["blockchain", "storage", "dag", "p2p", "decentralized", "ipfs", "arweave", "mesh", "lora", "zk-proofs"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -50,6 +50,32 @@ ml = [
 quantum = [
     "qiskit>=1.0.0",
     "qiskit-aer>=0.13.0",
+]
+mesh = [
+    "nawal-ai[mesh]>=1.1.0",
+    "meshtastic>=2.3.0",
+]
+zk = [
+    "kinich-quantum[zk]>=1.0.0",
+]
+blockchain = [
+    "substrate-interface>=1.8.0",
+    "nawal-ai[mesh]>=1.1.0",
+    "kinich-quantum[zk]>=1.0.0",
+]
+all = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "torch>=2.1.0",
+    "scikit-learn>=1.4.0",
+    "numpy>=1.26.0",
+    "qiskit>=1.0.0",
+    "qiskit-aer>=0.13.0",
+    "nawal-ai[mesh]>=1.1.0",
+    "kinich-quantum[zk]>=1.0.0",
+    "meshtastic>=2.3.0",
+    "substrate-interface>=1.8.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -108,6 +134,8 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "p2p: marks tests as P2P network tests",
+    "asyncio: marks tests as async tests",
+    "benchmark: marks tests as benchmark tests",
 ]
 
 [tool.mypy]

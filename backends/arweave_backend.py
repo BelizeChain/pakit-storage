@@ -12,7 +12,7 @@ import json
 import asyncio
 import time
 
-from ..blockchain.storage_proof_connector import get_storage_proof_connector
+from blockchain.storage_proof_connector import get_storage_proof_connector
 
 try:
     import arweave

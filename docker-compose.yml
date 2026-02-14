@@ -7,15 +7,35 @@ services:
     ports:
       - "8000:8000"
     environment:
+      # Storage configuration
       - PAKIT_STORAGE_DIR=/data/storage
       - PAKIT_LOG_LEVEL=INFO
       - PAKIT_ENABLE_ML=true
+      
+      # Blockchain integration (NEW)
+      - BLOCKCHAIN_ENABLED=true
+      - BLOCKCHAIN_NODE_URL=ws://belizechain:9944
+      - BLOCKCHAIN_PROOFS_ENABLED=true
+      
+      # ZK proofs configuration (NEW)
+      - ZK_PROOF_TYPE=groth16
+      - ZK_BATCH_THRESHOLD=10
+      - ZK_AUTO_SUBMIT=true
+      
+      # Mesh networking (NEW)
+      - MESH_ENABLED=true
+      - MESH_NETWORK_ID=pakit-prod
+      - MESH_DISCOVERY_INTERVAL=60
+      - MESH_MAX_PEERS=50
+      
+      # Redis
       - REDIS_URL=redis://redis:6379
     volumes:
       - pakit-storage:/data/storage
       - ./logs:/app/logs
     depends_on:
       - redis
+      - belizechain
     networks:
       - pakit-network
     restart: unless-stopped
@@ -23,18 +43,51 @@ services:
   pakit-p2p:
     build: .
     container_name: pakit-p2p
-    command: python -m node.p2p_node
+    command: python -m p2p.node
     ports:
-      - "7777:7777"
-      - "7778:7778"
+      - "7777:7777"  # P2P gossip
+      - "7778:7778"  # DHT
     environment:
+      # P2P configuration
       - PAKIT_P2P_PORT=7777
       - PAKIT_DHT_PORT=7778
+      - PAKIT_MAX_PEERS=100
+      
+      # Mesh networking (NEW)
+      - MESH_ENABLED=true
+      - MESH_NETWORK_ID=pakit-prod
+      - MESH_DISCOVERY_INTERVAL=60
+      - MESH_BYZANTINE_THRESHOLD=0.3
+      
+      # Storage
+      - PAKIT_STORAGE_DIR=/data/storage
     volumes:
       - pakit-storage:/data/storage
+      - ./logs:/app/logs
     networks:
       - pakit-network
     restart: unless-stopped
+  
+  # BelizeChain node (NEW)
+  belizechain:
+    image: belizechain/node:latest
+    container_name: belizechain-node
+    ports:
+      - "9944:9944"  # WebSocket RPC
+      - "9933:9933"  # HTTP RPC
+      - "30333:30333"  # P2P
+    volumes:
+      - belizechain-data:/data
+    networks:
+      - pakit-network
+    restart: unless-stopped
+    command: >
+      --dev
+      --ws-external
+      --rpc-external
+      --rpc-cors=all
+      --unsafe-ws-external
+      --unsafe-rpc-external
 
   redis:
     image: redis:7-alpine
@@ -51,9 +104,9 @@ services:
     image: ipfs/kubo:latest
     container_name: pakit-ipfs
     ports:
-      - "4001:4001"
-      - "5001:5001"
-      - "8080:8080"
+      - "4001:4001"  # Swarm
+      - "5001:5001"  # API
+      - "8080:8080"  # Gateway
     volumes:
       - ipfs-data:/data/ipfs
     networks:
@@ -66,6 +119,7 @@ volumes:
   pakit-storage:
   redis-data:
   ipfs-data:
+  belizechain-data:
 
 networks:
   pakit-network:

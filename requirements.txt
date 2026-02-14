@@ -13,8 +13,13 @@ base58>=2.1.1          # Base58 encoding for IPFS-style CIDs
 ipfshttpclient>=0.8.0a2  # IPFS integration (use alpha version)
 # arweave-python-client  # Arweave integration (install separately if needed)
 
+# BelizeChain Ecosystem Integration (NEW)
+substrate-interface>=1.8.0  # BelizeChain blockchain integration (UPGRADED)
+# nawal-ai[mesh]>=1.1.0       # Mesh networking with Ed25519 signing (COMING SOON - use mock for now)
+# kinich-quantum[zk]>=1.0.0   # Zero-knowledge proof system (COMING SOON - use mock for now)
+# meshtastic>=2.3.0           # LoRa mesh hardware support (optional) (COMING SOON)
+
 # Web hosting (BNS integration)
-substrate-interface>=1.7.0  # BelizeChain blockchain integration
 aiohttp>=3.9.0              # Async HTTP client/server
 dnspython>=2.6.0            # DNS verification for external domains
 aiofiles>=23.2.0            # Async file operations
@@ -26,12 +31,12 @@ acme>=2.7.0
 cryptography>=41.0.0
 pyOpenSSL>=23.3.0
 
-# Quantum integration (requires kinich)
-# numpy>=1.26.0         # Required for quantum operations
-# qiskit>=1.0.0         # Quantum computing framework
+# Quantum integration (requires kinich) - NOW REQUIRED
+numpy>=1.26.0         # Required for quantum operations
+# qiskit>=1.0.0         # Quantum computing framework (optional)
 
-# ML optimization (requires nawal)
-# scikit-learn>=1.4.0   # Machine learning for optimization
+# ML optimization (requires nawal) - NOW REQUIRED
+scikit-learn>=1.4.0   # Machine learning for optimization
 
 # API server (optional)
 fastapi>=0.109.0      # REST API
