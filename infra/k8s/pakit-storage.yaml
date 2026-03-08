@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pakit-storage
+  namespace: belizechain
+  labels:
+    app: pakit-storage
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pakit-storage
+  template:
+    metadata:
+      labels:
+        app: pakit-storage
+    spec:
+      containers:
+        - name: pakit-storage
+          image: belizechainacr.azurecr.io/pakit-storage:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: api
+          env:
+            - name: PAKIT_API_HOST
+              value: "0.0.0.0"
+            - name: PAKIT_API_PORT
+              value: "8000"
+            - name: STORAGE_DIR
+              value: "/app/pakit_storage"
+            - name: BLOCKCHAIN_ENABLED
+              value: "true"
+            - name: BLOCKCHAIN_WS_URL
+              value: "ws://belizechain-node.belizechain.svc.cluster.local:9944"
+            - name: REDIS_URL
+              value: "redis://redis:6379"
+            - name: IPFS_ENABLED
+              value: "false"
+            - name: ARWEAVE_ENABLED
+              value: "false"
+            - name: LOG_LEVEL
+              value: "info"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+          volumeMounts:
+            - name: pakit-storage-data
+              mountPath: /app/pakit_storage
+      volumes:
+        - name: pakit-storage-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pakit-storage
+  namespace: belizechain
+spec:
+  selector:
+    app: pakit-storage
+  ports:
+    - name: api
+      port: 8000
+      targetPort: 8000
+  type: LoadBalancer

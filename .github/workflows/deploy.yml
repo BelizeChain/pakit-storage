@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  REGISTRY: belizechainregistry.azurecr.io
+  REGISTRY: belizechainacr.azurecr.io
   IMAGE_NAME: pakit-storage
 
 jobs:
@@ -72,69 +72,39 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
 
-  # ── 3. Deploy ──────────────────────────────────────────
+  # ── 3. Deploy to AKS ───────────────────────────────────
   deploy:
     needs: build
     runs-on: ubuntu-latest
     environment: production
-    env:
-      ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
-      ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
-      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-      POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
-      REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
-      REDIS_HOST: ${{ secrets.REDIS_HOST }}
     steps:
-      - name: Setup SSH
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set AKS context
+        uses: azure/aks-set-context@v4
+        with:
+          resource-group: ${{ secrets.AZURE_RESOURCE_GROUP }}
+          cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
+
+      - name: Create namespace (if needed)
+        run: kubectl create namespace belizechain --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy to AKS
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
+          kubectl apply -f infra/k8s/pakit-storage.yaml
+          kubectl set image deployment/pakit-storage \
+            pakit-storage=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
+            -n belizechain
 
-      - name: Deploy to VM
-        continue-on-error: true
+      - name: Wait for rollout
+        run: kubectl rollout status deployment/pakit-storage -n belizechain --timeout=300s
+
+      - name: Verify deployment
         run: |
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 \
-            -i ~/.ssh/deploy_key \
-            "${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}" bash -s << ENDSSH
-          set -e
-
-          docker network create belizechain-net 2>/dev/null || true
-
-          echo "${ACR_PASSWORD}" | docker login belizechainregistry.azurecr.io \
-            -u "${ACR_USERNAME}" --password-stdin
-
-          docker pull belizechainregistry.azurecr.io/pakit-storage:latest
-
-          docker stop pakit-storage 2>/dev/null && docker rm pakit-storage 2>/dev/null || true
-
-          docker run -d \
-            --name pakit-storage \
-            --network belizechain-net \
-            --restart unless-stopped \
-            -p 8001:8000 \
-            -e DATABASE_URL="postgresql://belizechain:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/pakit" \
-            -e REDIS_URL="rediss://:${REDIS_PASSWORD}@${REDIS_HOST}:6380/1" \
-            -e BLOCKCHAIN_WS_URL="ws://belizechain-node:9944" \
-            -e ENVIRONMENT=production \
-            -e LOG_LEVEL=info \
-            -v pakit-data:/app/data \
-            belizechainregistry.azurecr.io/pakit-storage:latest
-
-          echo "Waiting for pakit-storage to become healthy..."
-          for i in \$(seq 1 20); do
-            if curl -sf http://localhost:8001/health > /dev/null 2>&1; then
-              echo "✅ pakit-storage is healthy"
-              exit 0
-            fi
-            echo "  Attempt \$i/20 — waiting 5s..."
-            sleep 5
-          done
-          echo "❌ pakit-storage failed health check"
-          docker logs --tail 50 pakit-storage
-          exit 1
-          ENDSSH
-
-      - name: Cleanup SSH key
-        if: always()
-        run: rm -f ~/.ssh/deploy_key
+          kubectl get pods -n belizechain -o wide
+          kubectl get svc -n belizechain
